@@ -46,6 +46,115 @@ export const useNotificationStore = defineStore('notification', () => {
     return `${baseUrl}/notifications`
   }
 
+  const parseNotificationMessage = (rawData: string): NotificationMessage => {
+    console.log('Parsing notification message:', rawData)
+    
+    try {
+      // First, try to parse as JSON
+      const data = JSON.parse(rawData)
+      
+      // Handle different message formats that might come from your backend
+      let notification: NotificationMessage
+
+      // Check if it's already in the correct format
+      if (data.id && data.title && data.message) {
+        notification = {
+          id: data.id,
+          title: data.title,
+          message: data.message,
+          type: data.type || data.notificationType || 'info',
+          timestamp: data.timestamp || new Date().toISOString(),
+          userId: data.userId,
+          read: false
+        }
+      } 
+      // Handle nested notification object
+      else if (data.type === 'notification' && data.notification) {
+        notification = {
+          id: data.notification.id || `notification-${Date.now()}`,
+          title: data.notification.title || 'Notification',
+          message: data.notification.message || '',
+          type: data.notification.type || data.notification.notificationType || 'info',
+          timestamp: data.notification.timestamp || new Date().toISOString(),
+          userId: data.notification.userId,
+          read: false
+        }
+      }
+      // Handle direct notification data from API
+      else if (data.title && data.message) {
+        notification = {
+          id: data.id || `notification-${Date.now()}`,
+          title: data.title,
+          message: data.message,
+          type: data.type || 'info',
+          timestamp: data.timestamp || new Date().toISOString(),
+          userId: data.userId,
+          read: false
+        }
+      }
+      // Handle any other JSON format - create a generic notification
+      else {
+        notification = {
+          id: `notification-${Date.now()}`,
+          title: data.title || 'New Notification',
+          message: data.message || JSON.stringify(data),
+          type: data.type || 'info',
+          timestamp: data.timestamp || new Date().toISOString(),
+          userId: data.userId,
+          read: false
+        }
+      }
+      
+      return notification
+      
+    } catch (error) {
+      console.log('Not valid JSON, treating as plain string notification')
+      
+      // Handle plain string notifications
+      let title = 'New Message'
+      let message = rawData
+      let type: 'info' | 'success' | 'warning' | 'error' = 'info'
+      
+      // Try to extract type from string patterns
+      const lowerMessage = rawData.toLowerCase()
+      if (lowerMessage.includes('error') || lowerMessage.includes('failed') || lowerMessage.includes('problem')) {
+        type = 'error'
+        title = 'Error'
+      } else if (lowerMessage.includes('success') || lowerMessage.includes('completed') || lowerMessage.includes('done')) {
+        type = 'success'
+        title = 'Success'
+      } else if (lowerMessage.includes('warning') || lowerMessage.includes('caution') || lowerMessage.includes('alert')) {
+        type = 'warning'
+        title = 'Warning'
+      }
+      
+      // Try to parse structured string formats
+      // Format: "TYPE: TITLE - MESSAGE"
+      const structuredMatch = rawData.match(/^(INFO|SUCCESS|WARNING|ERROR):\s*(.+?)\s*-\s*(.+)$/i)
+      if (structuredMatch) {
+        type = structuredMatch[1].toLowerCase() as 'info' | 'success' | 'warning' | 'error'
+        title = structuredMatch[2].trim()
+        message = structuredMatch[3].trim()
+      }
+      
+      // Format: "TITLE: MESSAGE"
+      const titleMatch = rawData.match(/^(.+?):\s*(.+)$/)
+      if (titleMatch && !structuredMatch) {
+        title = titleMatch[1].trim()
+        message = titleMatch[2].trim()
+      }
+      
+      return {
+        id: `notification-${Date.now()}`,
+        title,
+        message,
+        type,
+        timestamp: new Date().toISOString(),
+        read: false
+      }
+    }
+  }
+
   const connectWebSocket = () => {
     if (socket.value?.readyState === WebSocket.OPEN) {
       console.log('WebSocket already connected')
@@ -75,29 +184,30 @@ export const useNotificationStore = defineStore('notification', () => {
       socket.value.onmessage = (event) => {
         try {
           console.log('Received WebSocket message:', event.data)
-          const data = JSON.parse(event.data)
           
-          // Handle different message types
-          if (data.type === 'notification') {
-            const notification: NotificationMessage = {
-              id: data.id || `notification-${Date.now()}`,
-              title: data.title || 'Notification',
-              message: data.message || '',
-              type: data.notificationType || 'info',
-              timestamp: data.timestamp || new Date().toISOString(),
-              userId: data.userId,
-              read: false
-            }
-            
-            notifications.value.unshift(notification)
-            triggerBellBlink()
-          } else {
-            // Handle other message types
-            console.log('Received non-notification message:', data)
-          }
+          // Parse the notification regardless of format (JSON or string)
+          const notification = parseNotificationMessage(event.data)
+          
+          console.log('Processed notification:', notification)
+          notifications.value.unshift(notification)
+          triggerBellBlink()
+          
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
+          console.error('Error processing WebSocket message:', error)
           console.log('Raw message:', event.data)
+          
+          // Create fallback notification for completely unparseable messages
+          const fallbackNotification: NotificationMessage = {
+            id: `notification-${Date.now()}`,
+            title: 'System Message',
+            message: 'Received a message that could not be processed',
+            type: 'info',
+            timestamp: new Date().toISOString(),
+            read: false
+          }
+          
+          notifications.value.unshift(fallbackNotification)
+          triggerBellBlink()
         }
       }
 
@@ -168,6 +278,11 @@ export const useNotificationStore = defineStore('notification', () => {
     notifications.value.forEach(notification => {
       notification.read = true
     })
+    
+    // Optional: Send read status to backend
+    // sendMessage({ type: 'mark_all_read', userId: 'current-user-id' })
+    
+    console.log('All notifications marked as read')
   }
 
   const removeNotification = (id: string) => {
@@ -189,6 +304,34 @@ export const useNotificationStore = defineStore('notification', () => {
     window.dispatchEvent(event)
   }
 
+  // Add a method to manually add notifications for testing
+  const addTestNotification = (type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    const messages = {
+      info: { title: 'Test Info', message: 'This is a test informational message' },
+      success: { title: 'Test Success', message: 'This is a test success message' },
+      warning: { title: 'Test Warning', message: 'This is a test warning message' },
+      error: { title: 'Test Error', message: 'This is a test error message' }
+    }
+
+    const notification: NotificationMessage = {
+      id: `test-${Date.now()}`,
+      ...messages[type],
+      type,
+      timestamp: new Date().toISOString(),
+      read: false
+    }
+
+    notifications.value.unshift(notification)
+    triggerBellBlink()
+  }
+
+  // Add method to test string notifications
+  const addTestStringNotification = (stringMessage: string) => {
+    const notification = parseNotificationMessage(stringMessage)
+    notifications.value.unshift(notification)
+    triggerBellBlink()
+  }
+
   return {
     notifications,
     isConnected,
@@ -201,6 +344,8 @@ export const useNotificationStore = defineStore('notification', () => {
     markAsRead,
     markAllAsRead,
     removeNotification,
-    clearAllNotifications
+    clearAllNotifications,
+    addTestNotification,
+    addTestStringNotification
   }
 })
