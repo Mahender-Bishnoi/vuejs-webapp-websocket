@@ -202,6 +202,10 @@ const vClickOutside = {
 }
 </script>
 
+<script lang="ts">
+  export default {}
+</script>
+
 <style scoped>
 .notification-bell-container {
   position: relative;

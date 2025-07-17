@@ -117,6 +117,7 @@ export function useNotificationWebSocket(baseUrl: string = `${import.meta.env.VI
     url: `${baseUrl}/notifications`,
     onMessage: (event) => {
       try {
+        console.log('Received WebSocket message:', event.data)
         const notification = JSON.parse(event.data)
         notifications.value.unshift(notification)
         

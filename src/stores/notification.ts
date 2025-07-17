@@ -32,7 +32,7 @@ export const useNotificationStore = defineStore('notification', () => {
     
     // If not defined, construct from API URL
     if (!wsUrl) {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
+      const apiUrl = import.meta.env.VITE_API_URL
       wsUrl = apiUrl.replace(/^https?:\/\//, 'ws://').replace(/\/api$/, '/ws')
     }
     
@@ -69,7 +69,7 @@ export const useNotificationStore = defineStore('notification', () => {
         console.log('WebSocket connected successfully to:', wsUrl)
         
         // Send initial message if your backend expects it
-        // socket.value?.send(JSON.stringify({ type: 'subscribe', userId: 'current-user-id' }))
+        socket.value?.send(JSON.stringify({ type: 'subscribe', userId: 'current-user-id' }))
       }
 
       socket.value.onmessage = (event) => {

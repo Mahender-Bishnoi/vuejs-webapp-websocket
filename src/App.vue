@@ -1,4 +1,3 @@
-<!-- App.vue -->
 <template>
   <div id="app">
     <nav class="navbar">
@@ -16,13 +15,6 @@
       </div>
       
       <div class="navbar-actions">
-        <div class="connection-status">
-          <span 
-            class="status-dot"
-            :class="{ 'connected': isConnected, 'disconnected': !isConnected }"
-            :title="isConnected ? 'WebSocket Connected' : 'WebSocket Disconnected'"
-          ></span>
-        </div>
         <NotificationBell />
         <button @click="sendTestNotification" class="test-btn">
           Test Notification
@@ -49,7 +41,7 @@ const router = useRouter()
 const notificationStore = useNotificationStore()
 
 // Get API URL from environment
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
+const apiUrl = import.meta.env.VITE_API_URL
 
 const isConnected = computed(() => notificationStore.isConnected)
 
@@ -158,26 +150,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  transition: background-color 0.2s ease;
-}
-
-.status-dot.connected {
-  background-color: #28a745;
-}
-
-.status-dot.disconnected {
-  background-color: #dc3545;
 }
 
 .test-btn, .reconnect-btn {
