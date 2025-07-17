@@ -16,9 +16,19 @@
       </div>
       
       <div class="navbar-actions">
+        <div class="connection-status">
+          <span 
+            class="status-dot"
+            :class="{ 'connected': isConnected, 'disconnected': !isConnected }"
+            :title="isConnected ? 'WebSocket Connected' : 'WebSocket Disconnected'"
+          ></span>
+        </div>
         <NotificationBell />
         <button @click="sendTestNotification" class="test-btn">
           Test Notification
+        </button>
+        <button @click="reconnectWebSocket" class="reconnect-btn" v-if="!isConnected">
+          Reconnect
         </button>
       </div>
     </nav>
@@ -30,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NotificationBell from './components/NotificationBell.vue'
 import { useNotificationStore } from './stores/notification'
@@ -38,13 +48,17 @@ import { useNotificationStore } from './stores/notification'
 const router = useRouter()
 const notificationStore = useNotificationStore()
 
-// Direct environment variable access
-const baseURL = import.meta.env.VITE_API_URL
+// Get API URL from environment
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
 
 const isConnected = computed(() => notificationStore.isConnected)
 
 const sendTestNotification = () => {
   sendNotification('info')
+}
+
+const reconnectWebSocket = () => {
+  notificationStore.connectWebSocket()
 }
 
 const sendNotification = async (type: 'info' | 'success' | 'warning' | 'error') => {
@@ -58,7 +72,7 @@ const sendNotification = async (type: 'info' | 'success' | 'warning' | 'error') 
   const notification = messages[type]
   
   try {
-    await fetch(`${baseURL}/notifications/send`, {
+    const response = await fetch(`${apiUrl}/notifications/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,13 +84,28 @@ const sendNotification = async (type: 'info' | 'success' | 'warning' | 'error') 
         userId: 'current-user-id'
       })
     })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    console.log('Notification sent successfully')
   } catch (error) {
     console.error('Failed to send notification:', error)
+    
+    // Optionally show a local notification about the error
+    alert(`Failed to send notification: ${error}`)
   }
 }
 
 onMounted(() => {
+  console.log('App mounted, connecting WebSocket...')
   notificationStore.connectWebSocket()
+})
+
+onUnmounted(() => {
+  console.log('App unmounted, disconnecting WebSocket...')
+  notificationStore.disconnectWebSocket()
 })
 </script>
 
@@ -131,7 +160,27 @@ onMounted(() => {
   gap: 1rem;
 }
 
-.test-btn {
+.connection-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.status-dot.connected {
+  background-color: #28a745;
+}
+
+.status-dot.disconnected {
+  background-color: #dc3545;
+}
+
+.test-btn, .reconnect-btn {
   background: #007bff;
   color: white;
   border: none;
@@ -142,8 +191,16 @@ onMounted(() => {
   transition: background-color 0.2s ease;
 }
 
-.test-btn:hover {
+.test-btn:hover, .reconnect-btn:hover {
   background: #0056b3;
+}
+
+.reconnect-btn {
+  background: #dc3545;
+}
+
+.reconnect-btn:hover {
+  background: #c82333;
 }
 
 .main-content {
